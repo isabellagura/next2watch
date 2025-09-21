@@ -32,7 +32,7 @@ def load_df(path: str) -> pd.DataFrame:
 # Feature builders (cached)
 @st.cache_resource(show_spinner=False)
 def build_features(movies: pd.DataFrame):
-    # Text features (combination of title + overview)
+    # Combine text data (title + overview)
     text_data = (
         movies['title_norm'].astype('string').str.lower() + ' ' +
         movies['overview_norm'].astype('string').str.lower()
@@ -290,6 +290,7 @@ def _base_title(title: str):
 # Visualization 1: Top-N recommendation scores (horizontal bar chart)
 def plot_topn_scores_fig(title: str, top_n: int = TOP_N, figsize=(8, 4), dpi=110):
     base_title, _, _ = _base_title(title)
+    
     recs, _, msg = recommend(movies, matrices, title, top_n=top_n)
     if msg or recs.empty:
         return None
@@ -306,6 +307,7 @@ def plot_topn_scores_fig(title: str, top_n: int = TOP_N, figsize=(8, 4), dpi=110
     ax.set_ylabel('Title')
     ax.set_title(f"Top {top_n} Recommendations — {base_title}")
     ax.set_xlim(0, 1.0)
+
     plt.close(fig)
     return fig
 
@@ -313,16 +315,19 @@ def plot_topn_scores_fig(title: str, top_n: int = TOP_N, figsize=(8, 4), dpi=110
 # Visualization 2: Similarity score distribution (histogram)
 def plot_score_distribution_fig(title: str, top_n: int = 200, bins: int = 20, figsize=(8, 4), dpi=110):
     base_title, _, _ = _base_title(title)
+
     recs, _, msg = recommend(movies, matrices, title, top_n=top_n)
     if msg or recs.empty:
         return None
 
     scores = recs['Similarity Score'].to_numpy(float)
+
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
     ax.hist(scores, bins=bins)
     ax.set_xlabel('Similarity Score')
     ax.set_ylabel('Count')
     ax.set_title(f"Similarity Score Distribution — {base_title}")
+    
     plt.close(fig)
     return fig
 
@@ -348,7 +353,7 @@ def plot_score_breakdown_fig(title: str, top_n: int = TOP_N, figsize=(10, 5), dp
     sims = compute_similarities(int(base_pos), matrices)
     parts = np.vstack([WEIGHTS[s] * sims[s][idx] for s in signals])
 
-    # Popularity bump part (same normalization as recommend)
+    # Popularity bump part (same as recommend)
     pop = movies['popularity'].to_numpy(float)
     pop_scaled = scaled_popularity(pop)
     parts = np.vstack([parts, 0.05 * pop_scaled[idx]])
@@ -367,6 +372,7 @@ def plot_score_breakdown_fig(title: str, top_n: int = TOP_N, figsize=(10, 5), dp
     ax.set_ylabel('Title')
     ax.set_title(f"Score Breakdown by Signal — {base_title}")
     ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=4, frameon=False)
+
     plt.close(fig)
     return fig
 
@@ -374,6 +380,7 @@ def plot_score_breakdown_fig(title: str, top_n: int = TOP_N, figsize=(10, 5), dp
 def plot_dist_fig(title: str, top_n: int = TOP_N, by: str = 'keywords',
                   top_tokens: int = 15, figsize=(8, 4), dpi=110):
     base_title, _, _ = _base_title(title)
+
     recs, _, msg = recommend(movies, matrices, title, top_n=top_n)
     if msg or recs.empty:
         return None
@@ -382,9 +389,9 @@ def plot_dist_fig(title: str, top_n: int = TOP_N, by: str = 'keywords',
     if col is None or col not in recs.columns:
         return None
 
-    # split comma-separated tokens from the pretty table
+    # split comma-separated tokens
     items = []
-    for v in recs[col].fillna('').astype(str):
+    for v in recs[col].fillna('').astype(str).str.replace('_', ' ', regex=False):
         items.extend([t.strip() for t in v.split(',') if t.strip()])
 
     counts = Counter(items)
@@ -392,12 +399,15 @@ def plot_dist_fig(title: str, top_n: int = TOP_N, by: str = 'keywords',
         return None
 
     labels, nums = zip(*counts.most_common(top_tokens))
+
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi, constrained_layout=True)
+
     ax.bar(range(len(nums)), nums)
     ax.set_xticks(range(len(labels)), labels, rotation=45, ha='right')
     ax.set_xlabel(col)
     ax.set_ylabel('Count')
     ax.set_title(f"{col} Distribution in Top {top_n} — {base_title}")
+
     plt.close(fig)
     return fig
 
