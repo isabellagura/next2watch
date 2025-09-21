@@ -1,6 +1,5 @@
 # raw data
 data/raw/**
 data/*_dataset_*.csvdata/processed/movies_clean.parquet
-data/processed/*.parquet
 data_cache/
-*.parquet
+data/processed/movies_clean.parquet
