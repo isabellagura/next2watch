@@ -93,6 +93,58 @@ def as_pretty(df: pd.DataFrame, labels=None):
 def prettify_tokens_col(s: pd.Series) -> pd.Series:
     return (s.fillna('').astype(str).str.replace("_", " ", regex=False))
 
+# TEST
+def _token_set(text: str) -> set[str]:
+    """Comma-separated -> set of normalized tokens (underscores→spaces, lowercase)."""
+    if not isinstance(text, str):
+        return set()
+    return {t.strip().lower().replace("_", " ") for t in text.split(",") if t.strip()}
+
+def build_reasons_string(base_row: dict, rec_pretty_row: pd.Series) -> str:
+    """Return a short, readable rationale for a single recommendation."""
+    parts: list[str] = []
+
+    # Keywords: show up to 3 shared examples
+    bk = _token_set(base_row.get("keywords_norm", ""))
+    rk = _token_set(rec_pretty_row.get("Keywords", ""))
+    kw = sorted(bk & rk)
+    if kw:
+        shown = ", ".join(w.title() for w in kw[:3])
+        if len(kw) > 3:
+            shown += "…"
+        parts.append(f"Keywords: {shown}")
+
+    # Genres: just call out overlap
+    bg = _token_set(base_row.get("genres_norm", ""))
+    rg = _token_set(rec_pretty_row.get("Genres", ""))
+    if bg & rg:
+        parts.append("Genre overlap")
+
+    # Same decade
+    try:
+        by = base_row.get("release_year")
+        ry = rec_pretty_row.get("Year")
+        by = int(by) if by is not None else None
+        ry = int(ry) if pd.notna(ry) else None
+        if by is not None and ry is not None and (by // 10) == (ry // 10):
+            parts.append(f"Same decade: {ry // 10}0s")
+    except Exception:
+        pass
+
+    # Country / Company quick matches
+    bc = _token_set(base_row.get("countries_norm", ""))
+    rc = _token_set(rec_pretty_row.get("Countries", ""))
+    if bc & rc:
+        parts.append("Country match")
+
+    bp = _token_set(base_row.get("companies_norm", ""))
+    rp = _token_set(rec_pretty_row.get("Companies", ""))
+    if bp & rp:
+        parts.append("Studio match")
+
+    # Keep it compact
+    return " · ".join(parts)
+
 # Search function - maybe for dropdown results to display
 def search_title(movies: pd.DataFrame, query: str, top_k: int = 20) -> pd.DataFrame:
     q = str(query).strip().casefold()
@@ -330,7 +382,7 @@ matrices = build_features(movies)
 # Search box
 movie_title = st.text_input("Type a movie title to get recommendations:", placeholder="e.g., The Matrix")
 
-# Pick exact movie if there are same title matches
+# Select exact movie if there are same title matches
 selected_index = None
 q = movie_title.strip()
 if len(q) >= 2:
@@ -355,12 +407,11 @@ if len(q) >= 2:
 # Top-N slider
 # c1, c2 = st.columns([2,5])
 TABLE_N = st.slider("How many recommendations?", min_value=1, max_value=100, value=10)
-as_percent = st.toggle("Show similarity as %", value=False)
 
 # Toggle to show similarity score as percentage
-# as_percent = st.toggle("Show similarity as %", value=False)
+as_percent = st.toggle("Show similarity as %", value=False)
 
-# Call recommender
+# Show recommendations table
 if movie_title.strip():
     query_title = (movies.loc[selected_index, "title"] if selected_index is not None else movie_title)
 
@@ -373,21 +424,35 @@ if movie_title.strip():
         st.subheader(header)
         st.caption("Scored by: text (0.25), keywords (0.25), genres (0.20), meta (0.10), language (0.10), countries (0.06), companies (0.04) (+ small popularity bump)")
 
-        label = "Similarity Score"
-        format = None
+        score_col_key = "Similarity Score"
+        score_format = None
         display = recs.copy()
         display.index = pd.RangeIndex(start=1, stop=len(display)+1, name="Rank")
 
         if as_percent:
-            display[label] = (display[label] * 100).round(2)
-            label = "Similarity Score (%)"
-            format = "%.2f%%"
+            display[score_col_key] = (display[score_col_key] * 100).round(2)
+            score_label = "Similarity Score (%)"
+            score_format = "%.2f%%"
 
-        for col in ("Genres", "Keywords", "Countries", "Companies"):
+        for col in ("Genres", "Keywords", "Countries", "Production Companies"):
             if col in display.columns:
                 display[col] = prettify_tokens_col(display[col])
 
-        st.dataframe(display, width='stretch', column_config={"Similarity Score": st.column_config.NumberColumn(label=label, format=format)})
+        # Build Reasons column using the raw base row
+        resolved_query_title = movie_title
+        base_index, _ = get_base_index(movies, resolved_query_title)
+        base_row_dict = movies.loc[base_index].to_dict() if base_index is not None else {}
+
+        display["Reasons"] = display.apply(lambda r: build_reasons_string(base_row_dict, r), axis=1)
+
+        preferred_order = ["Title", score_col_key, "Reasons", "Year", "Language", "Countries", "Production Companies", "Genres", "Keywords", "Popularity", "Vote Count"]
+
+        # Put Reasons at the end (optional)
+        # desired_order = [c for c in display.columns if c != "Reasons"] + ["Reasons"]
+        display = display.reindex(columns=[c for c in preferred_order if c in display.columns])
+
+
+        st.dataframe(display, width='stretch', column_config={score_col_key: st.column_config.NumberColumn(label=score_label, format=score_format)})
         st.divider()
         st.markdown("**Visualizations:** Top-N scores, distribution, signal contributions, and token mix for the Top-N set")
         st.caption("Note: Charts below use Top 10 for consistency.")
@@ -406,5 +471,3 @@ if movie_title.strip():
 
     fig = plot_dist_fig(movie_title, top_n=TOP_N, by="keywords", top_tokens=15)
     if fig: col4.pyplot(fig)
-
-# Footer / Notes
