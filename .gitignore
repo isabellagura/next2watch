@@ -1,0 +1,4 @@
+# raw data
+data/raw/**
+data/*_dataset_*.csvdata/processed/movies_clean.parquet
+data/processed/*.parquet
