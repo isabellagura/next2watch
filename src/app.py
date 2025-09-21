@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from collections import Counter
 
 # App config
-st.set_page_config(page_title='Next2Watch', page_icon='🎬', layout='wide')
+st.set_page_config(page_title='Next2Watch – Get Movie Recommendations', page_icon='🎬', layout='wide')
 
 from recommender import (
     WEIGHTS,
