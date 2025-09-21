@@ -80,7 +80,7 @@ DISPLAY_LABELS = {
     'keywords_norm':'Keywords',
     'original_language': 'Language',
     'countries_norm': 'Countries',
-    'companies_norm': 'Companies',
+    'companies_norm': 'Production Companies',
     'similarity': 'Similarity Score',
     'vote_count': 'Vote Count',
     'popularity': 'Popularity'
@@ -90,7 +90,30 @@ def as_pretty(df: pd.DataFrame, labels=None):
     labels = labels or DISPLAY_LABELS
     return df.rename(columns=labels)
 
+def prettify_tokens_col(s: pd.Series) -> pd.Series:
+    return (s.fillna('').astype(str).str.replace("_", " ", regex=False))
+
 # Search function - maybe for dropdown results to display
+def search_title(movies: pd.DataFrame, query: str, top_k: int = 20) -> pd.DataFrame:
+    q = str(query).strip().casefold()
+    if not q:
+        return movies.iloc[0:0][["title", "release_year", "original_language"]]
+
+    titles_norm = movies["title_norm"].astype("string").str.casefold().str.strip()
+
+    # exact match first, else substring
+    idx = titles_norm.eq(q)
+    if not idx.any():
+        idx = titles_norm.str.contains(q, regex=False)
+
+    if not idx.any():
+        return movies.iloc[0:0][["title", "release_year", "original_language"]]
+
+    # sort by vote_count/popularity (ties -> most “known” first), keep original index
+    cols = ["title", "release_year", "original_language", "vote_count", "popularity"]
+    out = movies.loc[idx, cols].copy()
+    out = out.sort_values(["vote_count", "popularity"], ascending=False).head(top_k)
+    return out  # NOTE: keeps original index for each row
 
 # SELECT MOVIE
 # Pick base movie by normalized title (exact match first, then substring)
@@ -266,7 +289,6 @@ def plot_score_breakdown_fig(title: str, top_n: int = TOP_N, figsize=(10, 5), dp
     plt.close(fig)
     return fig
 
-
 # Visualization 4: Token frequency bar chart (keywords or genres)
 def plot_dist_fig(title: str, top_n: int = TOP_N, by: str = "keywords",
                   top_tokens: int = 15, figsize=(8, 4), dpi=110):
@@ -308,50 +330,76 @@ matrices = build_features(movies)
 # Search box
 movie_title = st.text_input("Type a movie title to get recommendations:", placeholder="e.g., The Matrix")
 
+selected_index = None
+q = movie_title.strip()
+if len(q) >= 2:
+    suggestions = search_title(movies, q, top_k=20)
+    if not suggestions.empty:
+        # Build options as (row_index, pretty_label) tuples; keep row_index to get the exact movie
+        options = [(int(idx),
+                    f"{row['title']} ({int(row['release_year'])})"
+                    if pd.notna(row['release_year']) else
+                    f"{row['title']}")
+                   for idx, row in suggestions.iterrows()]
+
+        selected = st.selectbox(
+            "Pick the exact movie (optional):",
+            options,
+            index=0,                      # default to first ranked suggestion
+            format_func=lambda x: x[1],   # show the pretty label
+        )
+        selected_index = selected[0]
+
+# Toggle to show similarity score as percentage
 as_percent = st.checkbox("Show similarity as %", value=False)
 
 # Top-N slider
+# TOP_N = st.slider("Select the amount of recommendations to show", min_value=1, max_value=100, value=10)
 
 # Call recommender
 if movie_title.strip():
-    recs, header, msg = recommend(movies, matrices, movie_title, top_n=TOP_N)
+    query_title = (movies.loc[selected_index, "title"] if selected_index is not None else movie_title)
+
+    recs, header, msg = recommend(movies, matrices, query_title, top_n=TOP_N)
     if msg:
         st.warning(msg)
     elif recs.empty:
-        st.warning(f"No recommendations to show for {movie_title}.")
+        st.warning(f"No recommendations to show for {query_title}.")
     else:
         st.subheader(header)
         st.caption("Scored by: text (0.25), keywords (0.25), genres (0.20), meta (0.10), language (0.10), countries (0.06), companies (0.04) (+ small popularity bump)")
 
         label = "Similarity Score"
         format = None
-        display = recs
+        display = recs.copy()
+        display.index = pd.RangeIndex(start=1, stop=len(display)+1, name="Rank")
 
         if as_percent:
-            display = recs.copy()
             display[label] = (display[label] * 100).round(2)
             label = "Similarity Score (%)"
             format = "%.2f%%"
 
-        st.dataframe(display, width='stretch', column_config={"Similarity Score": st.column_config.NumberColumn(label=label, format=format)})
+        for col in ("Genres", "Keywords", "Countries", "Companies"):
+            if col in display.columns:
+                display[col] = prettify_tokens_col(display[col])
 
+        st.dataframe(display, width='stretch', column_config={"Similarity Score": st.column_config.NumberColumn(label=label, format=format)})
+        st.divider()
         st.markdown("**Visualizations:** Top-N scores, distribution, signal contributions, and token mix for the Top-N set")
 
-# Display visualizations (UI)
-st.divider()
+    # Display visualizations (UI)
+    col1, col2 = st.columns(2, gap="small")
+    fig = plot_topn_scores_fig(movie_title, top_n=TOP_N)
+    if fig: col1.pyplot(fig)
 
-col1, col2 = st.columns(2, gap="small")
-fig = plot_topn_scores_fig(movie_title, top_n=TOP_N)
-if fig: col1.pyplot(fig)
+    fig = plot_score_distribution_fig(movie_title, top_n=200, bins=20)
+    if fig: col2.pyplot(fig)
 
-fig = plot_score_distribution_fig(movie_title, top_n=200, bins=20)
-if fig: col2.pyplot(fig)
+    col3, col4 = st.columns(2, gap="small")
+    fig = plot_score_breakdown_fig(movie_title, top_n=TOP_N)
+    if fig: col3.pyplot(fig)
 
-col3, col4 = st.columns(2, gap="small")
-fig = plot_score_breakdown_fig(movie_title, top_n=TOP_N)
-if fig: col3.pyplot(fig)
-
-fig = plot_dist_fig(movie_title, top_n=TOP_N, by="keywords", top_tokens=15)
-if fig: col4.pyplot(fig)
+    fig = plot_dist_fig(movie_title, top_n=TOP_N, by="keywords", top_tokens=15)
+    if fig: col4.pyplot(fig)
 
 # Footer / Notes
