@@ -24,16 +24,18 @@ from recommender import (
 
 # Constants
 TOP_N = 10
-LOCAL_FILE = 'data/processed/movies_clean.parquet' # EDIT
-HF_URL = "hf://datasets/isabellavg/next2watch-data-v1/movies_clean.parquet"
-GH_URL = "https://github.com/isabellagura/next2watch/releases/download/movies_v1/movies_clean.parquet"
+LOC_FILE = 'data/processed/movies_clean.parquet'
+HF_URL = "hf://datasets/isabellavg/next2watch-data-v1/movies_clean.parquet" # ADD
+GH_URL = "https://github.com/isabellagura/next2watch/releases/download/movies_v1/movies_clean.parquet" # ADD
 DATA_PATH = HF_URL
 
 # Cache loaders
 # Load data (cached)
-@st.cache_data(show_spinner=False)
-def load_df(path: str) -> pd.DataFrame:
-    return pd.read_parquet(path)
+# @st.cache_data(show_spinner=False)
+# def load_df(path: str) -> pd.DataFrame:
+#     return pd.read_parquet(path)
+
+movies = pd.read_parquet(DATA_PATH) # MOVED
 
 # Feature builders (cached)
 @st.cache_resource(show_spinner=False)
@@ -258,7 +260,7 @@ def plot_dist_fig(title: str, top_n: int = 50, by: str = 'keywords',
 st.title('Next2Watch 🎬 - Movie Recommender')
 
 # Load data for UI
-movies = load_df(DATA_PATH)
+# movies = pd.read_parquet(DATA_PATH) # MOVED
 matrices = build_features(movies)
 
 # Search box
