@@ -326,14 +326,14 @@ def plot_score_distribution_fig(title: str, top_n: int = 200, bins: int = 20, fi
     ax.hist(scores, bins=bins)
     ax.set_xlabel('Similarity Score')
     ax.set_ylabel('Count')
-    ax.set_title(f"Similarity Score Distribution — {base_title}")
+    ax.set_title(f"Similarity Score Distribution (Top {top_n}) — {base_title}")
     
     plt.close(fig)
     return fig
 
 
 # Visualization 3: Score breakdown by signal (stacked horizontal bar chart)
-def plot_score_breakdown_fig(title: str, top_n: int = TOP_N, figsize=(10, 5), dpi=110):
+def plot_score_breakdown_fig(title: str, top_n: int = TOP_N, figsize=(8, 4), dpi=110):
     signals = list(WEIGHTS)
 
     base_title, _, base_pos = _base_title(title)
@@ -377,7 +377,7 @@ def plot_score_breakdown_fig(title: str, top_n: int = TOP_N, figsize=(10, 5), dp
     return fig
 
 # Visualization 4: Token frequency bar chart (keywords or genres)
-def plot_dist_fig(title: str, top_n: int = TOP_N, by: str = 'keywords',
+def plot_dist_fig(title: str, top_n: int = 50, by: str = 'keywords',
                   top_tokens: int = 15, figsize=(8, 4), dpi=110):
     base_title, _, _ = _base_title(title)
 
@@ -516,5 +516,5 @@ if movie_title.strip():
     fig = plot_score_breakdown_fig(query_title, top_n=TOP_N)
     if fig: col3.pyplot(fig)
 
-    fig = plot_dist_fig(query_title, top_n=TOP_N, by='keywords', top_tokens=15)
+    fig = plot_dist_fig(query_title, top_n=50, by='keywords', top_tokens=15)
     if fig: col4.pyplot(fig)
