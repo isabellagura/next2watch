@@ -330,6 +330,7 @@ matrices = build_features(movies)
 # Search box
 movie_title = st.text_input("Type a movie title to get recommendations:", placeholder="e.g., The Matrix")
 
+# Pick exact movie if there are same title matches
 selected_index = None
 q = movie_title.strip()
 if len(q) >= 2:
@@ -350,17 +351,20 @@ if len(q) >= 2:
         )
         selected_index = selected[0]
 
-# Toggle to show similarity score as percentage
-as_percent = st.checkbox("Show similarity as %", value=False)
 
 # Top-N slider
-# TOP_N = st.slider("Select the amount of recommendations to show", min_value=1, max_value=100, value=10)
+# c1, c2 = st.columns([2,5])
+TABLE_N = st.slider("How many recommendations?", min_value=1, max_value=100, value=10)
+as_percent = st.toggle("Show similarity as %", value=False)
+
+# Toggle to show similarity score as percentage
+# as_percent = st.toggle("Show similarity as %", value=False)
 
 # Call recommender
 if movie_title.strip():
     query_title = (movies.loc[selected_index, "title"] if selected_index is not None else movie_title)
 
-    recs, header, msg = recommend(movies, matrices, query_title, top_n=TOP_N)
+    recs, header, msg = recommend(movies, matrices, query_title, top_n=TABLE_N)
     if msg:
         st.warning(msg)
     elif recs.empty:
@@ -386,6 +390,7 @@ if movie_title.strip():
         st.dataframe(display, width='stretch', column_config={"Similarity Score": st.column_config.NumberColumn(label=label, format=format)})
         st.divider()
         st.markdown("**Visualizations:** Top-N scores, distribution, signal contributions, and token mix for the Top-N set")
+        st.caption("Note: Charts below use Top 10 for consistency.")
 
     # Display visualizations (UI)
     col1, col2 = st.columns(2, gap="small")
