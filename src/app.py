@@ -24,7 +24,10 @@ from recommender import (
 
 # Constants
 TOP_N = 10
-DATA_PATH = 'data/processed/movies_clean.parquet'
+LOCAL_FILE = 'data/processed/movies_clean.parquet' # EDIT
+HF_URL = "hf://datasets/isabellavg/next2watch-data-v1/movies_clean.parquet"
+GH_URL = "https://github.com/isabellagura/next2watch/releases/download/movies_v1/movies_clean.parquet"
+DATA_PATH = HF_URL
 
 # Cache loaders
 # Load data (cached)
